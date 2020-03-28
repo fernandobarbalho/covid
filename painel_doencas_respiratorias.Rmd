@@ -1,0 +1,189 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(rsiconfi)
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+
+load("DoencasRespiratorias.RData")
+
+choices_uf <- c("Todas UFs",sort((municipios_IBGE%>%filter(!is.na(cod_uf))%>%distinct(uf))$uf))
+choices_doencas<- c("Todas Doenças Respiratórias", (CID10%>%
+                            filter(str_sub(Codigo,1,1)=="J" | str_sub(Codigo,1,3)=="U04")%>%
+                            select(descricao) )$descricao)
+```
+
+Sidebar {.sidebar}
+=====================================
+
+```{r}
+# shiny inputs defined here
+selectInput("doencas","Doenças Respiratorias",choices = choices_doencas, selected = "Todas Doenças Respiratórias", multiple =  TRUE)
+selectInput("uf","UF",choices = choices_uf, selected = "Todas UFs", multiple = TRUE)
+#selectInput("ano","Ano",choices = c("2018":"2014"), selected = "2018")
+
+seleciona_uf<- function(selecionador){
+  
+  tudo<- sort((municipios_IBGE%>%filter(!is.na(cod_uf))%>%distinct(uf))$uf)
+  if (selecionador== "Todas UFs"){
+    tudo
+  } else{
+    selecionador
+  }
+}
+
+
+seleciona_doenca<- function(selecionador){
+  
+  
+  if (selecionador== "Todas Doenças Respiratórias"){
+    (CID10 %>%
+      filter(str_sub(Codigo,1,1)=="J"| str_sub(Codigo,1,3)=="U04") %>% 
+      select(Codigo))$Codigo
+  } else{
+    (CID10%>%
+      filter(descricao == selecionador) %>%
+      select(Codigo))$Codigo
+  }
+}
+
+
+
+```
+
+
+Visão Global 
+=====================================  
+
+
+
+Column {data-width}
+-----------------------------------------------------------------------
+
+### Gráfico totalizador série temporal
+
+```{r}
+renderPlot({
+  
+  if (is.null(input$uf) || is.null(input$doencas)){
+    print("retornou")
+    return()
+  }
+  
+  
+  
+  
+  #input_uf <- ifelse(is.null(input$uf),"Todas UFs",input$uf)
+  #input_doenca<- ifelse(is.null(input$doencas),"Todas Doenças Respiratórias",input$doencas)
+  
+  uf_sel<- seleciona_uf(input$uf)
+  doenca_sel <- seleciona_doenca(input$doencas)
+  
+  #uf_sel<- seleciona_uf("Todas UFs")
+  #doenca_sel <- seleciona_doenca("Todas Doenças Respiratórias")
+  
+  
+
+  df_obitos_respiratorios_serie %>%
+  filter(UF %in% uf_sel,
+         Codigo %in% doenca_sel) %>%
+  filter(!is.na(faixa_etaria)) %>%
+  group_by(ano_obito, mes_obito) %>%
+    summarise(quantidade = sum(quantidade)) %>%
+  ggplot(aes(x= mes_obito, y= quantidade)) +
+  geom_line(aes(group= factor(ano_obito), color = factor(ano_obito)), size = 1.5) +
+  scale_color_viridis(discrete=TRUE, option = "C") +
+  
+  theme_light() +
+  theme(
+    #axis.text.x =  element_text(angle = 90, hjust = 1),
+    #panel.grid = element_blank()
+  )+
+  labs(
+    title =  "Gráfico da distribuição de óbitos por doenças respiratórias por mês",
+    y = "Total de Óbitos",
+    x=  "Mês",
+    color = "Ano"
+  )+
+  scale_y_continuous(labels=function(x) format(x, big.mark = ".", scientific = FALSE))
+  #facet_grid(mes_obito~.,  space = "free_y") +
+  #coord_flip()
+
+  print("passou pelo gráfico")
+})
+
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+# renderPlot({
+#   
+#   
+#   if (is.null(input$uf) || is.null(input$doencas)){
+#     return()
+#   }
+#   
+#   #input_uf <- ifelse(is.null(input$uf),"Todas UFs",input$uf)
+#   #input_doenca<- ifelse(is.null(input$doencas),"Todas Doenças Respiratórias",input$doencas)
+#   
+#   uf_sel<- seleciona_uf(input$uf)
+#   doenca_sel <- seleciona_doenca(input$doencas)
+#   
+#   #uf_sel<- seleciona_uf("Todas UFs")
+#   #doenca_sel <- seleciona_doenca("Todas Doenças Respiratórias")
+#   
+#   
+# 
+#   df_obitos_respiratorios_serie %>%
+#   filter(UF %in% uf_sel,
+#          Codigo %in% doenca_sel) %>%
+#   filter(!is.na(faixa_etaria)) %>%
+#   group_by(mes_obito, faixa_etaria) %>%
+#     summarise(quantidade = sum(quantidade)) %>%  
+#   ggplot(aes(x= mes_obito, y= quantidade, fill= faixa_etaria))+
+#     geom_col()  +
+#   scale_fill_viridis(discrete=TRUE, option = "C") +
+#   
+#   theme_light() +
+#   theme(
+#     #axis.text.x =  element_text(angle = 90, hjust = 1),
+#     #panel.grid = element_blank()
+#   )+
+#   labs(
+#     title =  "Gráfico da distribuição de óbitos por doenças respiratórias por mês",
+#     y = "Total de Óbitos",
+#     x=  "Mês",
+#     color = "Ano"
+#   )
+#   scale_y_continuous(labels=function(x) format(x, big.mark = ".", scientific = FALSE))
+#   #facet_grid(mes_obito~.,  space = "free_y") +
+#   coord_flip()
+# 
+#   
+# })
+
+
+```
+
+### Chart C
+
+```{r}
+
+```
+
